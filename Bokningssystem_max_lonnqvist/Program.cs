@@ -265,6 +265,8 @@ public class Lokal : IBookable
     public void VisaBokningar()
     {
         _bokningshantering.VisaAllaBokningar();
+        Console.WriteLine();
+        Console.WriteLine("Tryck valfri tangent...");
         Console.ReadKey();
     }
     public void TaBortBokning()
