@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using Bokningssystem_max_lonnqvist;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 
@@ -7,9 +8,31 @@ namespace Bokningssystem_max_lonnqvist
 {
     internal class Program
     {
+        public static void UtvecklareJSON()
+        {
+            string utvecklare = "Max";
+            string jsonString = JsonSerializer.Serialize(utvecklare, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            File.WriteAllText("utvecklare.json", jsonString);
+        }
+
+        public static string userName = "";
         static void Main(string[] args)
         {
+            UtvecklareJSON();
+            
             SkapaLokal.LaddaFrånJson();
+
+            
+
+            Console.WriteLine("Välkommen till bokningssystemet!");
+            Console.Write("Login: ");
+            userName = Console.ReadLine() ?? "";
+
+
 
             bool runProgram = true;
             while (runProgram == true)
@@ -30,13 +53,23 @@ namespace Bokningssystem_max_lonnqvist
                     switch (input)
                     {
                         case "1":
+                            Lokal lokal = new Lokal();
+                            lokal.BokaTid();
                             break;
                         case "2":
+                            Lokal visaBokningar = new Lokal();
+                            visaBokningar.VisaBokningar();
                             break;
                         case "3":
+                            Lokal taBortBokning = new Lokal();
+                            taBortBokning.TaBortBokning();
                             break;
                         case "4":
-                            SkapaLokal.SkrivUtAllaLokaler();
+                            SkapaLokal.SkrivUtAllaGrupprum();
+                            SkapaLokal.SkrivUtAllaSalar();
+                            Console.WriteLine();
+                            Console.WriteLine("Tryck valfri tangent...");
+                            Console.ReadKey();
                             break;
                         case "5":
                             SkapaLokal.NyLokal();
@@ -62,9 +95,13 @@ interface IBookable
 }
 public class Lokal : IBookable
 {
+    public static readonly Bokningshantering _bokningshantering = new Bokningshantering();
+
     //Open times
     static int openTime = 8;
     static int closingTime = 17;
+
+
 
     public void BokaTid()
     {
@@ -76,10 +113,82 @@ public class Lokal : IBookable
         TimeSpan bokadTid;
 
 
+        int valdLokalId = 0;
+        string valdLokalNamn = "";
+        string lokalTyp = "";
+        string idInput;
+        int valtId;
+        Console.Clear();
+        Console.WriteLine("Vill du boka ett grupprum eller en sal?");
+        Console.WriteLine("[1] Grupprum");
+        Console.WriteLine("[2] Sal");
+
+        string input = Console.ReadLine();
+        switch (input)
+        {
+            case "1":
+                lokalTyp = "Grupprum";  
+                Console.WriteLine("Grupprum");
+                SkapaLokal.SkrivUtAllaGrupprum();
+
+                Console.WriteLine("Ange ID på lokalen du vill boka:");
+                idInput = Console.ReadLine();
+
+                if (!int.TryParse(idInput, out valtId)) //Validering av input
+                {
+                    Console.WriteLine("Ogiltigt ID");
+                    return;
+                }
+
+                //Hämtar det valda grupprummet baserat på ID
+                var valtRum = SkapaLokal.HämtaAllaGrupprum().FirstOrDefault(r => r._lokalId == valtId); 
+
+                if (valtRum == null) //Om inget rum hittas med det angivna ID
+                {
+                    Console.WriteLine("Lokalen hittades inte.");
+                    return;
+                }
+
+                //Spara ID och namn på den valda lokalen
+                valdLokalId = valtRum._lokalId;
+                valdLokalNamn = valtRum.GrupprumNamn;
+
+                break;
+
+            case "2":
+                lokalTyp = "Sal";
+                Console.WriteLine("Salar");
+                SkapaLokal.SkrivUtAllaSalar();
+
+                Console.WriteLine("Ange ID på lokalen du vill boka:");
+                idInput = Console.ReadLine();
+
+                if (!int.TryParse(idInput, out valtId)) //Validering av input
+                {
+                    Console.WriteLine("Ogiltigt ID");
+                    return;
+                }
+
+                //Hämtar den valda salen baserat på ID
+                var valdSal = SkapaLokal.HämtaAllaSalar().FirstOrDefault(r => r._lokalId == valtId);
+                
+                if (valdSal == null) //Om ingen sal hittas med det angivna ID
+                {
+                    Console.WriteLine("Lokalen hittades inte.");
+                    return;
+                }
+
+                //Spara ID och namn på den valda lokalen
+                valdLokalId = valdSal._lokalId;
+                valdLokalNamn = valdSal.SalNamn;
+                break;
+            default:
+                Console.WriteLine("Ogiltigt val, du kommer att bokas i ett grupprum");
+                break;
+        }
 
         while (pickStartTime)
         {
-            Console.Clear();
             Console.WriteLine("[0] Tillbaka");
             Console.WriteLine($"Vilken tid vill du boka ({openTime}-{closingTime - 1})");
             string inputStartTime = Console.ReadLine();
@@ -110,13 +219,13 @@ public class Lokal : IBookable
 
 
                     //Pick when your booked time ends
-                    while (pickEndTime = true)
+                    while (pickEndTime == true)
                     {
                         Console.WriteLine($"Välj när du vill avsulta bokningen");
                         string inputEndTime = Console.ReadLine();
 
                         isInt = int.TryParse(inputEndTime, out value); //Returns true is input is an integer
-                                                                       //Checks if the input is a valid input
+                                                                       
                         if (string.IsNullOrEmpty(inputEndTime) || isInt == false)
                         {
                             Console.WriteLine("Vänligen välj en siffra");
@@ -129,6 +238,11 @@ public class Lokal : IBookable
 
                                 endTime = new TimeOnly(endTimeInt, 0); //Displays HH:00
                                 bokadTid = endTime - startTime; //Displays HH
+
+                                _bokningshantering.LäggTillBokning(new Bokning(Program.userName,
+                                    valdLokalId,
+                                    valdLokalNamn,
+                                    startTime,endTime));
 
                                 pickEndTime = false;                                   
                                 break;
@@ -148,10 +262,120 @@ public class Lokal : IBookable
             }
         }
     }
+    public void VisaBokningar()
+    {
+        _bokningshantering.VisaAllaBokningar();
+        Console.ReadKey();
+    }
+    public void TaBortBokning()
+    {
+        var bokningar = _bokningshantering.Bokningar;
+
+        if (bokningar == null || bokningar.Count == 0) 
+        {
+            Console.WriteLine("Det finns inga bokningar att ta bort.");
+            Console.ReadKey();
+            return;
+        }
+
+        Console.Clear();
+        Console.WriteLine("Välj vilken bokning du vill ta bort: ");
+
+
+        for (int i = 0; i < bokningar.Count; i++)
+        {
+            var b = bokningar[i];
+            Console.WriteLine($"[{i + 1}] Bokare: {b.Bokare} | Lokal: {b.LokalNamn} | ID: {b.LokalId} | {b.StartTid}-{b.SlutTid}");
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("[0] Avbryt");
+
+        string input = Console.ReadLine();
+
+        if (!int.TryParse(input, out int val))
+        {
+            Console.WriteLine("Ogiltigt val.");
+            Console.ReadKey();
+            return;
+        }
+
+        if (val == 0)
+            return;
+
+        if (val < 1 || val > bokningar.Count)
+        {
+            Console.WriteLine("Ogiltigt nummer.");
+            Console.ReadKey();
+            return;
+        }
+
+        var bokningAttTaBort = bokningar[val - 1];
+        _bokningshantering.TaBortBokning(bokningAttTaBort);
+
+        Console.WriteLine("Bokningen är nu borttagen.");
+        Console.ReadKey();
+    }
 }
+
+public class Bokning
+{
+    public string Bokare { get; set; }
+    public int LokalId { get; set; }
+    public string LokalNamn { get; set; }
+    public TimeOnly StartTid { get; set; }
+    public TimeOnly SlutTid { get; set; }
+
+    public Bokning() { }
+
+    public Bokning(string bokare, int lokalId, string lokalNamn,
+                   TimeOnly startTid, TimeOnly slutTid)
+    {
+        Bokare = bokare;
+        LokalId = lokalId;
+        LokalNamn = lokalNamn;
+        StartTid = startTid;
+        SlutTid = slutTid;
+    }
+}
+public class Bokningshantering
+{
+    public List<Bokning> Bokningar { get; set; }
+    public Bokningshantering()
+    {
+        Bokningar = new List<Bokning>();
+    }
+    public void LäggTillBokning(Bokning bokning)
+    {
+        if (bokning == null) return;
+        Bokningar.Add(bokning);
+    }
+    public void VisaAllaBokningar()
+    {
+        if (Bokningar == null || Bokningar.Count == 0)
+        {
+            Console.WriteLine("Det finns inga bokningar.");
+            return;
+        }
+        foreach (var bokning in Bokningar)
+        {
+            Console.WriteLine($"Bokare: {bokning.Bokare} | Lokal: {bokning.LokalNamn} | Starttid: {bokning.StartTid} | Sluttid: {bokning.SlutTid}");
+        }
+    }
+    public void TaBortBokning(Bokning bokning)
+    {
+        if (bokning == null) return;
+        Bokningar.Remove(bokning);
+    }
+}
+
 public class Grupprum : Lokal
 {
     private static int LokalID = 1; //ID för lokalen som automatiskt tilldelas när man skapar ett nytt rum
+    public static void SättNästaId(int nästaId)
+    {
+        LokalID = nästaId;
+    }
     public int _lokalId { get; set; }
     public int Kapacitet { get; set; }
     public string GrupprumNamn { get; set; }
@@ -170,7 +394,11 @@ public class Grupprum : Lokal
 }
 public class Sal : Lokal
 {
-    private static int ID = 1; //Namnet för lokalen som automatiskt tilldelas när man skapar ett nytt rum
+    private static int LokalID = 1; //Namnet för lokalen som automatiskt tilldelas när man skapar ett nytt rum
+    public static void SättNästaId(int nästaId)
+    {
+        LokalID = nästaId;
+    }
     public int _lokalId { get; set; }
     public int Kapacitet { get; set; }
     public string SalNamn { get; set; }
@@ -179,8 +407,8 @@ public class Sal : Lokal
     public Sal() { } //Tom konstruktor för json serialisering
     public Sal(string typ, int kapacitet, string salNamn)
     {
-        _lokalId = ID;
-        ID++;
+        _lokalId = LokalID;
+        LokalID++;
         Typ = typ;
         Kapacitet = kapacitet;
         SalNamn = salNamn;
@@ -230,7 +458,6 @@ public class SkapaLokal
         while (grupprumsNamn == "")
         {
             Console.WriteLine($"Vad heter grupprummet?: ");
-            // coalesce null to empty string so compiler knows it's non-null
             grupprumsNamn = Console.ReadLine() ?? "";
             if (grupprumsNamn == "")
             {
@@ -239,7 +466,7 @@ public class SkapaLokal
         }
 
         int kapacitet = 0;
-        Console.WriteLine($"Hur många personer får plats i grupprummet?: ");
+        Console.WriteLine($"Hur många personer får plats i grupprummet?: (1-8)");
         while (kapacitet < 1 || kapacitet > 8)
         {
             string kapacitetInput = Console.ReadLine();
@@ -290,7 +517,7 @@ public class SkapaLokal
         }
 
         int kapacitet = 0;
-        Console.WriteLine($"Hur många personer får plats i salen?: ");
+        Console.WriteLine($"Hur många personer får plats i salen?: (8-50)");
         while (kapacitet < 8 || kapacitet > 50)
         {
             string kapacitetInput = Console.ReadLine();
@@ -325,19 +552,25 @@ public class SkapaLokal
         Console.ReadKey();
     }
 
-    public static void SkrivUtAllaLokaler()
+    public static void SkrivUtAllaGrupprum()
     {
         Console.Clear();
         Console.WriteLine("Grupprum");
         _gruppHantering.VisaAllaGrupprum();
-
+    }
+    public static List<Grupprum> HämtaAllaGrupprum()
+    {
+        return _gruppHantering.GrupprumLista;
+    }
+    public static void SkrivUtAllaSalar()
+    {
         Console.WriteLine();
         Console.WriteLine("Salar");
         _salHantering.VisaAllaSalar();
-
-        Console.WriteLine();
-        Console.WriteLine("Tryck valfri tangent...");
-        Console.ReadKey();
+    }
+    public static List<Sal> HämtaAllaSalar()
+    {
+        return _salHantering.SalLista;
     }
     public static void LaddaFrånJson()
     {
@@ -391,6 +624,11 @@ public class HanteringAvGrupprum
             string jsonString = File.ReadAllText("grupprum.json");
             GrupprumLista = JsonSerializer.Deserialize<List<Grupprum>>(jsonString)
                             ?? new List<Grupprum>();
+            if (GrupprumLista.Count > 0)
+            {
+                int maxId = GrupprumLista.Max(r => r._lokalId);
+                Grupprum.SättNästaId(maxId + 1);
+            }
         }
     }
 
@@ -441,6 +679,11 @@ public class HanteringAvSalar
             string jsonString = File.ReadAllText("salar.json");
             SalLista = JsonSerializer.Deserialize<List<Sal>>(jsonString)
                         ?? new List<Sal>();
+            if (SalLista.Count > 0)
+            {
+                int maxId = SalLista.Max(r => r._lokalId);
+                Sal.SättNästaId(maxId + 1);
+            }
         }
     }
 
